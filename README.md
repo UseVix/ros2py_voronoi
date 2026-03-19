@@ -7,6 +7,4 @@ ros2 run ros2py_voronoi voronoi_diagram_creator_node.py<br>
 ros2 run ros2py_voronoi graph_visualiser.py<br>
 4 Terminal:<br>
 ros2 run nav2_util lifecycle_bringup map_server && rviz2<br>
-TODO:
-odfiltrować z finalnego grafu węzły i krawędzie które leżą na nieznanych/zajętych terenach. Najlepiej zrobić to z pomocą shapeley to też pewnie się troszkę zmieni w zależności od tego jak będą wyglądały occupancy mapy
-Dodać kategoryzacje lewo/prawo/prosto
+I można wziąć graf z topica /voronoi_graph
