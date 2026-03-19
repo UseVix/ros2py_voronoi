@@ -8,6 +8,9 @@ import pyvoronoi
 from ros2py_voronoi.msg import Graph, GraphNode, GraphEdge
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
 import matplotlib.pyplot as plt
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
+from shapely.geometry import Point, LineString
 
 class VoronoiDiagramCreator(Node):
     def __init__(self):
@@ -46,24 +49,35 @@ class VoronoiDiagramCreator(Node):
 
         # 3. OpenCV: Find contours of the walls
         contours, hierarchy = cv2.findContours(
-            binary_map, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+            binary_map, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         # 4. Initialize Pyvoronoi (Scaling factor 100 to handle float precision)
         pv = pyvoronoi.Pyvoronoi(10000)
 
         # Add the outer bounding box of the map to contain the diagram
-        pv.AddSegment([[0, 0], [width, 0]])
-        pv.AddSegment([[width, 0], [width, height]])
-        pv.AddSegment([[width, height], [0, height]])
-        pv.AddSegment([[0, height], [0, 0]])
-
+        #pv.AddSegment([[0, 0], [width, 0]])
+        #pv.AddSegment([[width, 0], [width, height]])
+        #pv.AddSegment([[width, height], [0, height]])
+        #pv.AddSegment([[0, height], [0, 0]])
+        holes = []
+        outers = []
+        hierarchy_level = 1
         # 5. Simplify contours into line segments and feed to Pyvoronoi
         for cnt, hier in zip(contours, hierarchy[0]):
             # Douglas-Peucker line simplification. 
             # Epsilon 1.0 means we tolerate 1 pixel of deviation.
+            parent_idx = hier[3] 
+                    # Calculate depth by climbing the family tree until we hit the top (-1)
+            level = 0
+            while parent_idx != -1:
+                level += 1
+                parent_idx = hierarchy[0][parent_idx][3] # Move up to the next parent
             approx = cv2.approxPolyDP(cnt, 1.0, closed=True)
             pts = [pt[0] for pt in approx]
-            
+            if level==hierarchy_level+1 and len(pts) >= 3:
+                holes.append(Polygon(pts))
+            if level==hierarchy_level and len(pts) >= 3:
+                outers.append(Polygon(pts))
             for i in range(len(pts)):
                 p1 = pts[i]
                 p2 = pts[(i + 1) % len(pts)]
@@ -76,15 +90,34 @@ class VoronoiDiagramCreator(Node):
         # 7. Package the output into our custom ROS 2 message
         graph_msg = Graph()
         graph_msg.header = msg.header
+        # Let's pretend you have these two raw lists of Shapely Polygons
 
+
+        # 1. Merge all outer boundaries into a single Master Geometry
+        # (This handles overlapping rooms perfectly, too!)
+        master_outers = unary_union(outers)
+
+        # 2. Merge all hole boundaries into a single Master Geometry
+        master_holes = unary_union(holes)
+
+        # 3. Punch the holes out of the outers in one C++ optimized step!
+        final_navigable_map = master_outers.difference(master_holes)
+
+        # Done! 'final_navigable_map' is now a mathematically perfect 
+        # MultiPolygon with all holes correctly nested inside their proper parents.
         # Extract Nodes (Vertices)
         vertices = pv.GetVertices()
+        new_indices=[]
         for v in vertices:
-            node_msg = GraphNode()
-            # Convert grid coordinates back to real-world meters
-            node_msg.x = origin_x + (v.X * res)
-            node_msg.y = origin_y + (v.Y * res)
-            graph_msg.nodes.append(node_msg)
+            if final_navigable_map.contains(Point(v.X,v.Y)):
+                node_msg = GraphNode()
+                # Convert grid coordinates back to real-world meters
+                node_msg.x = origin_x + (v.X * res)
+                node_msg.y = origin_y + (v.Y * res)
+                graph_msg.nodes.append(node_msg)
+                new_indices.append(len(graph_msg.nodes)-1)
+            else:
+                new_indices.append(-1)
 
         # Extract Edges
         edges = pv.GetEdges()
@@ -92,10 +125,15 @@ class VoronoiDiagramCreator(Node):
             # We only want finite edges that form the primary skeleton
             #if e.is_primary and e.is_linear:
                 # Ensure the edge connects to valid vertex indices
-                if e.start != -1 and e.end != -1:
+                start=vertices[e.start]
+                end=vertices[e.end]
+                line=LineString([(start.X,start.Y),(end.X,end.Y)])
+                new_start = new_indices[e.start]
+                new_end = new_indices[e.end]
+                if e.start != -1 and e.end != -1 and line.within(final_navigable_map) and new_start != -1 and new_end != -1:
                     edge_msg = GraphEdge()
-                    edge_msg.start_index = e.start
-                    edge_msg.end_index = e.end
+                    edge_msg.start_index = new_start
+                    edge_msg.end_index = new_end
                     graph_msg.edges.append(edge_msg)
 
         # 8. Publish the graph
@@ -122,7 +160,10 @@ class VoronoiDiagramCreator(Node):
         plt.figure()
         # 3. Plot the Pyvoronoi Graph Edges (Red)
         for e in edges:
-            if e.start != -1 and e.end != -1:
+            start=vertices[e.start]
+            end=vertices[e.end]
+            line=LineString([(start.X,start.Y),(end.X,end.Y)])
+            if e.start != -1 and e.end != -1 and line.within(final_navigable_map):
                 v1 = vertices[e.start]
                 v2 = vertices[e.end]
                 plt.plot([v1.X, v2.X], [v1.Y, v2.Y], color='red', linewidth=1)
