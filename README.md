@@ -8,3 +8,4 @@ ros2 run ros2py_voronoi graph_visualiser.py<br>
 4 Terminal:<br>
 ros2 run nav2_util lifecycle_bringup map_server && rviz2<br>
 I można wziąć graf z topica /voronoi_graph
+<img width="559" height="697" alt="image" src="https://github.com/user-attachments/assets/42a68681-1196-41e4-9379-c7ff98fd969a" />
