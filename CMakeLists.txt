@@ -19,6 +19,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 install(PROGRAMS
   scripts/voronoi_diagram_creator_node.py
   scripts/graph_visualiser.py
+  scripts/voronoi_saver.py
+  scripts/voronoi_loader.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
