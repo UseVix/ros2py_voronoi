@@ -100,3 +100,5 @@ python3 scripts/plot_graph.py
 ```
 
 <img width="559" height="697" alt="image" src="https://github.com/user-attachments/assets/42a68681-1196-41e4-9379-c7ff98fd969a" />
+<img width="2010" height="1431" alt="image" src="https://github.com/user-attachments/assets/6424d4aa-deb0-4316-a267-c48d7f8acaf8" />
+
