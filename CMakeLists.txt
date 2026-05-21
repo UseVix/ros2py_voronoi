@@ -12,6 +12,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/GraphNode.msg"
   "msg/GraphEdge.msg"
   "msg/Graph.msg"
+  "msg/JunctionData.msg"
+  "msg/PolarCoordinates.msg"
   DEPENDENCIES std_msgs
 )
 
@@ -21,6 +23,7 @@ install(PROGRAMS
   scripts/graph_visualiser.py
   scripts/voronoi_saver.py
   scripts/voronoi_loader.py
+  scripts/junction_semantics_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

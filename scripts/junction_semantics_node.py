@@ -33,6 +33,7 @@ class PolarCoordinatesCOnverter(Node):
         self.latest_graph = None
         self.commands = []
         self.previous_junction_node = None
+        self.command_is_being_processed = False
     def commands_callback(self, msg):
         self.get_logger().info(f"Received command: {msg.data}")
         self.commands.append(msg.data)
@@ -78,6 +79,7 @@ class PolarCoordinatesCOnverter(Node):
         car_orientation = car_coordinates.orientation
         car_x = car_coordinates.x
         car_y = car_coordinates.y
+        
         closest_edge = None
         closest_edge_distance = float('inf')
         for edge in graph.edges:
@@ -88,44 +90,55 @@ class PolarCoordinatesCOnverter(Node):
             if distance_to_edge < closest_edge_distance:
                 closest_edge_distance = distance_to_edge
                 closest_edge = edge
+        if closest_edge is not None:
+            start_node = graph.nodes[closest_edge.start_index]
+            end_node = graph.nodes[closest_edge.end_index]
+            edge1_angular_distance = abs(self.normalise_angle(car_orientation - atan2(start_node.y - car_y, start_node.x - car_x)))
+            edge2_angular_distance = abs(self.normalise_angle(car_orientation - atan2(end_node.y - car_y, end_node.x - car_x)))
+            if edge1_angular_distance < edge2_angular_distance:
+                junction_node = start_node
+                visited_node = end_node
+                
+            else:            
+                junction_node = end_node
+                visited_node = start_node
+            angles = []
+            nodes = []
+            reference_angle = atan2(visited_node.y - junction_node.y, visited_node.x - junction_node.x)
+            for edge in graph.edges:
+                potential_destination_node = None
 
-        start_node = graph.nodes[closest_edge.start_index]
-        end_node = graph.nodes[closest_edge.end_index]
-        edge1_angular_distance = abs(self.normalise_angle(car_orientation - atan2(start_node.y - car_y, start_node.x - car_x)))
-        edge2_angular_distance = abs(self.normalise_angle(car_orientation - atan2(end_node.y - car_y, end_node.x - car_x)))
-        if edge1_angular_distance < edge2_angular_distance:
-            junction_node = start_node
-            visited_node = end_node
-            
-        else:            
-            junction_node = end_node
-            visited_node = start_node
-        angles = []
-        nodes = []
-        reference_angle = atan2(visited_node.y - junction_node.y, visited_node.x - junction_node.x)
-        for edge in graph.edges:
-            potential_destination_node = None
-
-            if (graph.nodes[edge.end_index] == junction_node):
-                potential_destination_node = graph.nodes[edge.end_index]
-            if (graph.nodes[edge.start_index] == junction_node):
-                potential_destination_node = graph.nodes[edge.start_index]
-            if potential_destination_node is not None and potential_destination_node != visited_node:
-                    angles.append(self.normalise_angle(atan2(potential_destination_node.y - junction_node.y, potential_destination_node.x - junction_node.x)-reference_angle))
-                    nodes.append(potential_destination_node)
-        pairs = sorted(zip(angles, nodes), key=lambda p: p[0])
-        angles, nodes = map(list, zip(*pairs))
-        m = re.search(r"\d+", self.commands[0])
-        number = int(self.commands[0][m.start():]) if m else 0
-        direction = self.commands[0][:m.start()] if m else self.commands[0]
-        match direction.lower():
-            case "left" or "l" or "lewo" or "lewy":
-                destination_node = nodes[number-1]
-            case "right" or "r" or "prawo" or "prawy":
-                destination_node = nodes[-number]
-            case "straight" or "s" or "forward" or "f" or "prosto" or "prosty":
-                destination_node = nodes[np.argmin(np.abs(angles))]
-        return visited_node, junction_node, destination_node         
+                if (graph.nodes[edge.end_index] == junction_node):
+                    potential_destination_node = graph.nodes[edge.end_index]
+                if (graph.nodes[edge.start_index] == junction_node):
+                    potential_destination_node = graph.nodes[edge.start_index]
+                if potential_destination_node is not None and potential_destination_node != visited_node:
+                        angles.append(self.normalise_angle(atan2(potential_destination_node.y - junction_node.y, potential_destination_node.x - junction_node.x)-reference_angle))
+                        nodes.append(potential_destination_node)
+            pairs = sorted(zip(angles, nodes), key=lambda p: p[0])
+            angles, nodes = map(list, zip(*pairs))
+            match (len(nodes),len(self.commands)):
+                case 0,_:
+                    destination_node = GraphNode(x=float('nan'), y=float('nan'))
+                case (node_count, command_count) if node_count == 1 or command_count == 0:
+                    destination_node = nodes[0]
+                case (node_count, command_count) if node_count > 1 and command_count > 0:
+                    self.command_is_being_processed = True
+                    m = re.search(r"\d+", self.commands[0])
+                    number = int(self.commands[0][m.start():]) if m else 0
+                    direction = self.commands[0][:m.start()] if m else self.commands[0]
+                    match direction.lower():
+                        case "left" or "l" or "lewo" or "lewy":
+                            destination_node = nodes[number-1]
+                        case "right" or "r" or "prawo" or "prawy":
+                            destination_node = nodes[-number]
+                        case "straight" or "s" or "forward" or "f" or "prosto" or "prosty":
+                            destination_node = nodes[np.argmin(np.abs(angles))] 
+        else:
+            visited_node = GraphNode(x=float('nan'), y=float('nan'))
+            junction_node = GraphNode(x=float('nan'), y=float('nan'))
+            destination_node = GraphNode(x=float('nan'), y=float('nan'))
+        return visited_node, junction_node, destination_node
     def GeneratePolarCoordinates(self,car_coordinates,junction_coordinates):
         car_x = car_coordinates.x
         car_y = car_coordinates.y
@@ -154,8 +167,9 @@ class PolarCoordinatesCOnverter(Node):
         junction_data_msg = JunctionData()
         junction_data_msg.header.stamp = self.get_clock().now().to_msg()
         junction_data_msg.visited_node, junction_data_msg.junction_node, junction_data_msg.destination_node = self.get_junction(graph, localisation)
-        if self.previous_junction_node is not None and self.previous_junction_node != junction_data_msg.junction_node:
+        if self.previous_junction_node is not None and self.previous_junction_node != junction_data_msg.junction_node and self.command_is_being_processed:
             self.commands.pop(0)  # Remove the command once we've reached a new junction
+            self.command_is_being_processed = False
         self.previous_junction_node = junction_data_msg.junction_node
         junction_data_msg.polar_coordinates_with_respect_to_car = self.GeneratePolarCoordinates(localisation, junction_data_msg.junction_node)
         
