@@ -10,7 +10,7 @@ import pyvoronoi
 from ros2py_voronoi.msg import Graph, GraphNode, GraphEdge, JunctionData, PolarCoordinates
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
 from std_msgs.msg import String
-
+# TODO make it possible to receive localisation
 class PolarCoordinatesCOnverter(Node):
     def __init__(self):
         super().__init__('voronoi_diagram_creator_node')

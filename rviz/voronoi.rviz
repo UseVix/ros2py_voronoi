@@ -1,0 +1,38 @@
+Visualization Manager:
+  Class: ""
+  Name: "root"
+  Global Options:
+    Fixed Frame: "camera_1"
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+  Displays:
+    - Name: "OccupancyGrid"
+      Class: "rviz_default_plugins/Map"
+      Enabled: true
+      Topic: "/map"
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: MarkerArray
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /voronoi_input_markers
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: MarkerArray
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /voronoi_markers
+      Value: true
+  

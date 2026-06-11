@@ -1,0 +1,16 @@
+<launch>
+  <arg name="bag" default="/autonomous-crossing-navigation/bags/tf_lidar_6kamer_gps_rosbag_occ_sam_slim"/>
+  <arg name="occupancy_topic" default="/occ_sam/occupancy_grid"/>
+  <arg name="rviz_config" default="$(find-pkg-share ros2py_voronoi)/rviz/voronoi.rviz"/>
+  <arg name="playback_rate" default="0.1" description="Playback rate for bag file (0.5 = 50% speed)"/>
+
+  <group>
+    <set_remap from="/map" to="$(var occupancy_topic)"/>
+
+    <node pkg="ros2py_voronoi" exec="voronoi_diagram_creator_node.py" name="voronoi_diagram_creator_node" output="screen"/>
+    <node pkg="ros2py_voronoi" exec="graph_visualiser.py" name="graph_visualiser" output="screen"/>
+    <executable cmd="ros2 bag play $(var bag) --rate $(var playback_rate)" name="bag_play" output="screen"/>
+    <node pkg="rviz2" exec="rviz2" name="rviz2" args="-d $(var rviz_config)" output="screen">
+    </node>
+  </group>
+</launch>
